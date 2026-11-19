@@ -46,7 +46,11 @@ async function getSpaceImages() {
 
   try {
     const url =
-      `https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&start_date=${startDate}&end_date=${endDate}`;
+      
+const toNASAdate = date => date.slice(2).replaceAll("-", "");
+
+const url =
+  `https://science.nasa.gov/wp-json/wp/v2/apod-basic?date_from=${toNASAdate(startDate)}&date_to=${toNASAdate(endDate)}&per_page=25`;
 
     const response = await fetch(url);
 
