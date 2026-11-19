@@ -1,17 +1,16 @@
 
 /* NASA SPACE EXPLORER APP */
 
-// Set up the date inputs
+// Date inputs
 const startInput = document.getElementById("startDate");
 const endInput = document.getElementById("endDate");
 
 setupDateInputs(startInput, endInput);
 
-// Find the gallery and button
 const gallery = document.getElementById("gallery");
 const getImagesButton = document.querySelector(".filters button");
 
-// Random space facts - EXTRA CREDIT!
+// EXTRA CREDIT: Random space facts
 const facts = [
   "One day on Venus is longer than its year!",
   "Neutron stars can spin hundreds of times per second.",
@@ -31,7 +30,19 @@ factBox.textContent =
 
 gallery.before(factBox);
 
-// Fetch NASA images
+// NASA's new API uses YYMMDD dates
+function formatDate(date) {
+  return date.slice(2).replaceAll("-", "");
+}
+
+// Remove HTML formatting from NASA explanations
+function cleanText(value) {
+  const element = document.createElement("div");
+  element.innerHTML = value || "";
+  return element.textContent.trim();
+}
+
+// Retrieve space photos
 async function getSpaceImages() {
   const startDate = startInput.value;
   const endDate = endInput.value;
@@ -41,26 +52,46 @@ async function getSpaceImages() {
     return;
   }
 
-  gallery.innerHTML = "<p>🚀 Loading space photos...</p>";
+  const days = Math.round(
+    (Date.parse(endDate) - Date.parse(startDate)) /
+    86400000
+  ) + 1;
+
+  if (days > 25) {
+    alert("Please select 25 days or fewer.");
+    return;
+  }
+
+  gallery.textContent = "🚀 Loading space photos...";
   getImagesButton.disabled = true;
 
   try {
     const url =
-      
-const toNASAdate = date => date.slice(2).replaceAll("-", "");
-
-const url =
-  `https://science.nasa.gov/wp-json/wp/v2/apod-basic?date_from=${toNASAdate(startDate)}&date_to=${toNASAdate(endDate)}&per_page=25`;
+      "https://science.nasa.gov/wp-json/wp/v2/apod-basic" +
+      "?date_from=" + formatDate(startDate) +
+      "&date_to=" + formatDate(endDate) +
+      "&per_page=25";
 
     const response = await fetch(url);
 
     if (!response.ok) {
-      throw new Error("NASA API request failed: " + response.status);
+      throw new Error("NASA API error: " + response.status);
     }
 
     const data = await response.json();
 
+    if (!Array.isArray(data)) {
+      throw new Error("Unexpected NASA API response.");
+    }
+
     gallery.innerHTML = "";
+
+    if (data.length === 0) {
+      gallery.textContent = "No photos found for these dates.";
+      return;
+    }
+
+    data.sort((a, b) => a.date.localeCompare(b.date));
 
     data.forEach(item => {
       const card = document.createElement("div");
@@ -68,22 +99,34 @@ const url =
       card.tabIndex = 0;
       card.setAttribute("role", "button");
 
-      // Handle both images and videos
-      if (item.media_type === "image") {
+      // EXTRA CREDIT: Handle images and videos
+      if (item.media_type === "image" && item.hdurl) {
         const image = document.createElement("img");
-        image.src = item.url;
-        image.alt = item.title;
+        image.src = item.hdurl;
+        image.alt = item.alt || item.title;
         image.loading = "lazy";
+
+        image.onerror = () => {
+          image.remove();
+          const fallback = document.createElement("div");
+          fallback.className = "video-placeholder";
+          fallback.textContent = "🌌 View on NASA";
+          card.prepend(fallback);
+        };
+
         card.appendChild(image);
       } else {
-        const videoBox = document.createElement("div");
-        videoBox.className = "video-placeholder";
-        videoBox.textContent = "🎬 Space Video";
-        card.appendChild(videoBox);
+        const placeholder = document.createElement("div");
+        placeholder.className = "video-placeholder";
+        placeholder.textContent =
+          item.media_type === "image"
+            ? "🌌 View on NASA"
+            : "🎬 Space Video";
+        card.appendChild(placeholder);
       }
 
       const title = document.createElement("h3");
-      title.textContent = item.title;
+      title.textContent = item.title || "NASA Space Photo";
 
       const date = document.createElement("p");
       date.textContent = item.date;
@@ -102,14 +145,10 @@ const url =
       gallery.appendChild(card);
     });
 
-    if (data.length === 0) {
-      gallery.textContent = "No space photos found.";
-    }
-
   } catch (error) {
-    console.error(error);
+    console.error("NASA Error:", error);
     gallery.textContent =
-      "Unable to load space photos. Please try again or choose a shorter date range.";
+      "Unable to load space photos. " + error.message;
   } finally {
     getImagesButton.disabled = false;
   }
@@ -152,52 +191,61 @@ function openModal(item) {
 
   content.appendChild(closeButton);
 
-  if (item.media_type === "image") {
+  // Display large image or NASA page link
+  if (item.media_type === "image" && item.hdurl) {
     const image = document.createElement("img");
-    image.src = item.hdurl || item.url;
-    image.alt = item.title;
+    image.src = item.hdurl;
+    image.alt = item.alt || item.title;
+    image.onerror = () => {
+      image.remove();
+    };
     content.appendChild(image);
-  } else {
-    const videoLink = document.createElement("a");
-    videoLink.href = item.url;
-    videoLink.target = "_blank";
-    videoLink.rel = "noopener noreferrer";
-    videoLink.textContent = "🎬 Watch this space video";
-    content.appendChild(videoLink);
   }
 
   const title = document.createElement("h2");
-  title.textContent = item.title;
+  title.textContent = item.title || "NASA Space Photo";
 
   const date = document.createElement("p");
   date.textContent = item.date;
 
   const explanation = document.createElement("p");
-  explanation.textContent = item.explanation;
+  explanation.textContent = cleanText(item.explanation);
 
   content.append(title, date, explanation);
 
+  // Direct link to NASA article
+  if (item.permalink || item.url) {
+    const nasaLink = document.createElement("a");
+    nasaLink.href = item.permalink || item.url;
+    nasaLink.target = "_blank";
+    nasaLink.rel = "noopener noreferrer";
+    nasaLink.textContent =
+      item.media_type === "image"
+        ? "🌌 View original on NASA"
+        : "🎬 Watch on NASA";
+
+    content.appendChild(nasaLink);
+  }
+
   modal.appendChild(content);
   modal.hidden = false;
-
   document.body.style.overflow = "hidden";
   closeButton.focus();
 }
 
-// Close popup by clicking outside
+// Close by clicking outside
 modal.addEventListener("click", event => {
   if (event.target === modal) {
     closeModal();
   }
 });
 
-// Close popup with Escape key
+// Close with Escape
 document.addEventListener("keydown", event => {
   if (event.key === "Escape" && !modal.hidden) {
     closeModal();
   }
 });
 
-// Run when the button is clicked
+// Button click
 getImagesButton.addEventListener("click", getSpaceImages);
-
